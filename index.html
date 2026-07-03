@@ -1554,15 +1554,28 @@ async function pullAndMergeFromSheets(silent) {
       data.registros.forEach(r => {
         const id = parseInt(r.id);
         if (!isNaN(id) && !idsLocales.has(String(id))) {
+          // Normalizar tipo — Sheets guarda el label visible, necesitamos la clave interna
+          const tipoNorm = String(r.tipo||'').includes('ehículo') ? 'vehiculo' :
+                           String(r.tipo||'').includes('EPP') || String(r.tipo||'').includes('🦺') ? 'epp' :
+                           String(r.tipo||'').includes('erramienta') ? 'herramientas' :
+                           String(r.tipo||'').toLowerCase();
+
+          // Para vehículos: el móvil puede venir en "trabajador" y el conductor en "puesto"
+          // Sheets guarda: col E = trabajador/móvil, col F = puesto/conductor
+          const esVehiculo = tipoNorm === 'vehiculo';
+          const movilVal   = esVehiculo ? (r.movil || r.trabajador || null) : null;
+          const conductorVal = esVehiculo ? (r.puesto || r.conductor || null) : null;
+          const trabajadorVal = !esVehiculo ? (r.trabajador || null) : null;
+
           APP.registros.push({
             id,
-            tipo: r.tipo,
+            tipo: tipoNorm,
             fecha: normalizarFecha(r.fecha),
             hora: r.hora,
-            trabajador: r.tipo !== 'vehiculo' ? (r.trabajador || null) : null,
-            movil: r.movil || null,
-            puesto: r.puesto || null,
-            conductor: r.tipo === 'vehiculo' ? (r.trabajador || null) : null,
+            trabajador: trabajadorVal,
+            movil: movilVal,
+            puesto: !esVehiculo ? (r.puesto || null) : null,
+            conductor: conductorVal,
             observaciones: r.observaciones || '',
             resultado: r.resultado,
             estado: r.estado || 'pendiente_revision',
