@@ -1909,13 +1909,14 @@ function renderDesktopDashboard() {
   // Cumplimiento semanal por vehículo — comparar fechas como strings
   const MOVILES = ['RM01', 'RM06', 'RM08', 'RM09'];
   const cumplVehiculos = MOVILES.map(movil => {
-    const tieneEstaSemana = APP.registros.some(r => {
+    const regEstaSemana = APP.registros.find(r => {
       if (r.tipo !== 'vehiculo' || r.movil !== movil) return false;
       const fechaReg = normalizarFecha(r.fecha);
       return fechaReg >= lunesStr && fechaReg <= hoyStr;
     });
+    const tieneEstaSemana = !!regEstaSemana;
     let estado = tieneEstaSemana ? 'ok' : (esViernes ? 'vence-hoy' : 'pendiente');
-    return { movil, tieneEstaSemana, estado };
+    return { movil, tieneEstaSemana, estado, registro: regEstaSemana || null };
   });
   const vehiculosPendientes = cumplVehiculos.filter(v => !v.tieneEstaSemana);
 
@@ -2019,9 +2020,15 @@ function renderDesktopDashboard() {
                 ${cumplVehiculos.map(v => `
                   <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--r);background:${v.estado==='ok'?'var(--verde-l)':v.estado==='vence-hoy'?'var(--rojo-l)':'var(--ambar-l)'};">
                     <span style="font-size:13px;font-weight:700;color:var(--azul);min-width:36px;">${v.movil}</span>
-                    <span style="flex:1;font-size:11px;color:${v.estado==='ok'?'var(--verde)':v.estado==='vence-hoy'?'var(--rojo)':'var(--ambar)'};">
-                      ${v.estado==='ok' ? '✅ Realizado esta semana' : v.estado==='vence-hoy' ? '🚨 Vence hoy — no realizado' : '⏳ Pendiente para esta semana'}
-                    </span>
+                    <div style="flex:1;">
+                      <div style="font-size:11px;color:${v.estado==='ok'?'var(--verde)':v.estado==='vence-hoy'?'var(--rojo)':'var(--ambar)'};font-weight:600;">
+                        ${v.estado==='ok' ? '✅ Realizado' : v.estado==='vence-hoy' ? '🚨 Vence hoy — no realizado' : '⏳ Pendiente'}
+                      </div>
+                      ${v.registro ? `<div style="font-size:10px;color:var(--gris-4);margin-top:2px;">
+                        Conductor: ${v.registro.conductor || '—'}
+                        ${v.registro.acompanante && v.registro.acompanante !== 'solo' && v.registro.acompanante !== 'otra_area' ? ` · Acompañante: ${v.registro.acompanante}` : v.registro.acompanante === 'otra_area' ? ' · Acomp.: otra área' : ' · Solo'}
+                      </div>` : ''}
+                    </div>
                   </div>`).join('')}
               </div>
             </div>
