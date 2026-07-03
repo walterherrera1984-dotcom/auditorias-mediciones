@@ -630,7 +630,7 @@ body {
     height: 72px;
     border-bottom: 3px solid var(--accent);
     border-right: 1px solid rgba(255,255,255,.08);
-    padding: 0 20px;
+    padding: 0 16px;
     position: sticky;
     top: 0;
     z-index: 200;
@@ -638,7 +638,19 @@ body {
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
+    display: flex;
+    align-items: center;
   }
+  .header-logo { flex: 1; min-width: 0; }
+  .header-logo-img { height: 32px; }
+  .header-title {
+    font-size: 11px !important;
+    letter-spacing: .3px !important;
+    line-height: 1.3 !important;
+    white-space: normal !important;
+  }
+  .header-sub { font-size: 9px; margin-top: 3px; }
+  .header-divider { display: none; }
   /* Ocultar el botón de refresh y avatar del header en desktop — van en el topbar */
   .header > button,
   .header-user { display: none !important; }
