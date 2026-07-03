@@ -1891,9 +1891,11 @@ function renderDesktopDashboard() {
 
   // ── LÓGICA DE CUMPLIMIENTO ────────────────────────────────────
   // Calcular inicio de semana actual (lunes)
+  // Calcular lunes de la semana actual como string YYYY-MM-DD (evita problema de zona horaria)
   const lunesActual = new Date(hoy);
   lunesActual.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
-  lunesActual.setHours(0,0,0,0);
+  const lunesStr = lunesActual.toISOString().split('T')[0];
+  const hoyStr = hoy.toISOString().split('T')[0];
   const esViernes = hoy.getDay() === 5;
 
   // Último viernes del mes
@@ -1904,13 +1906,13 @@ function renderDesktopDashboard() {
     hoy.getDate() === ultimoViernesMes.getDate() &&
     hoy.getMonth() === ultimoViernesMes.getMonth();
 
-  // Cumplimiento semanal por vehículo
+  // Cumplimiento semanal por vehículo — comparar fechas como strings
   const MOVILES = ['RM01', 'RM06', 'RM08', 'RM09'];
   const cumplVehiculos = MOVILES.map(movil => {
     const tieneEstaSemana = APP.registros.some(r => {
       if (r.tipo !== 'vehiculo' || r.movil !== movil) return false;
-      const d = new Date(r.fecha); d.setHours(0,0,0,0);
-      return d >= lunesActual && d <= hoy;
+      const fechaReg = normalizarFecha(r.fecha);
+      return fechaReg >= lunesStr && fechaReg <= hoyStr;
     });
     let estado = tieneEstaSemana ? 'ok' : (esViernes ? 'vence-hoy' : 'pendiente');
     return { movil, tieneEstaSemana, estado };
@@ -1935,8 +1937,8 @@ function renderDesktopDashboard() {
   const currentUser = APP.currentUser;
   const misVehiculosEstaSemana = currentUser ? APP.registros.filter(r => {
     if (r.tipo !== 'vehiculo') return false;
-    const d = new Date(r.fecha); d.setHours(0,0,0,0);
-    if (d < lunesActual || d > hoy) return false;
+    const fechaReg = normalizarFecha(r.fecha);
+    if (fechaReg < lunesStr || fechaReg > hoyStr) return false;
     return r.conductor === currentUser.nombre || r.acompanante === currentUser.nombre;
   }) : [];
 
@@ -3794,7 +3796,8 @@ function renderOperarioDashboard() {
   // Inicio de semana actual (lunes)
   const lunesActual = new Date(hoy);
   lunesActual.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
-  lunesActual.setHours(0,0,0,0);
+  const lunesStr2 = lunesActual.toISOString().split('T')[0];
+  const hoyStr2 = hoy.toISOString().split('T')[0];
   const esViernes = hoy.getDay() === 5;
 
   // Último viernes del mes
@@ -3808,8 +3811,8 @@ function renderOperarioDashboard() {
   // ¿Participé en un control de vehículo esta semana (como conductor o acompañante)?
   const miVehiculoEstaSemana = APP.registros.find(r => {
     if (r.tipo !== 'vehiculo') return false;
-    const d = new Date(r.fecha); d.setHours(0,0,0,0);
-    if (d < lunesActual || d > hoy) return false;
+    const fechaReg = normalizarFecha(r.fecha);
+    if (fechaReg < lunesStr2 || fechaReg > hoyStr2) return false;
     return r.conductor === u.nombre || r.acompanante === u.nombre;
   });
   const vehEstadoSemana = miVehiculoEstaSemana ? 'ok' : (esViernes ? 'vence-hoy' : 'pendiente');
