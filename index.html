@@ -1257,6 +1257,39 @@ body {
           <button class="btn btn-success" style="flex:2" onclick="submitForm('semaforos')">✓ Confirmar y enviar</button>
         </div>
       </div>
+
+      <!-- FORM SOLICITUD / PEDIDO -->
+      <div id="form-reclamo" style="display:none;">
+        <div class="page-hero" style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:#F5A623;">
+          <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border:none;padding:6px 10px;" onclick="closeForm()">← Volver</button>
+          <span style="font-size:13px;font-weight:700;color:#fff;font-family:'Cocogoose',sans-serif;letter-spacing:.3px;">📢 Pedido / Reporte</span>
+        </div>
+        <div class="user-chip">
+          <div class="user-chip-avatar" id="rec-avatar">—</div>
+          <div class="user-chip-info">
+            <div class="user-chip-name" id="rec-user-name">—</div>
+            <div class="user-chip-role">Herramienta, EPP, vehículo o lo que necesites</div>
+          </div>
+          <span class="badge accent" id="rec-fecha-badge">—</span>
+        </div>
+        <div class="card">
+          <div class="form-group" style="padding:14px 16px 0;">
+            <label class="form-label">Contanos qué necesitás o qué encontraste <span class="req">*</span></label>
+            <textarea class="form-textarea" id="rec-descripcion" placeholder="Ej: se me rompió el destornillador phillips / necesito guantes talle L / el RM08 tiene una rueda pinchada..." style="min-height:100px;"></textarea>
+          </div>
+          <div class="form-group" style="padding:10px 16px 16px;">
+            <label class="photo-area" for="foto-reclamo" style="padding:14px;" onclick="preAuthDrive(event)">
+              <input type="file" id="foto-reclamo" accept="image/*" capture="environment" onchange="previewFotoItem('reclamo')">
+              <div>📷 Adjuntar foto (opcional)</div>
+            </label>
+            <div class="photo-previews" id="foto-reclamo-previews"></div>
+          </div>
+        </div>
+        <div style="padding:14px 12px;display:flex;gap:8px;">
+          <button class="btn btn-secondary" style="flex:1" onclick="closeForm()">Cancelar</button>
+          <button class="btn btn-success" style="flex:2;background:#F5A623;" onclick="submitReclamo()">✓ Enviar</button>
+        </div>
+      </div>
     </div>
 
     <!-- HALLAZGOS -->
@@ -1290,6 +1323,7 @@ body {
           <button class="btn btn-sm btn-secondary" onclick="filterHist('herramientas',this)" id="filt-herr">🔧 Herramientas</button>
           <button class="btn btn-sm btn-secondary" onclick="filterHist('vehiculo',this)" id="filt-veh">🚗 Vehículo</button>
           <button class="btn btn-sm btn-secondary" onclick="filterHist('semaforos',this)" id="filt-sem">🚦 Semáforos</button>
+          <button class="btn btn-sm btn-secondary" onclick="filterHist('solicitud',this)" id="filt-rec">📨 Solicitudes</button>
         </div>
         <div id="historial-list"></div>
         <div id="historial-empty" class="empty" style="display:none;">
@@ -1306,6 +1340,7 @@ body {
     <!-- REPORTES -->
     <div class="view" id="view-reportes"></div>
     <div class="view" id="view-mapa"></div>
+    <div class="view" id="view-solicitudes"></div>
 
     <!-- ADMIN -->
     <div class="view" id="view-admin">
@@ -1462,6 +1497,10 @@ body {
   </button>
   <button class="sidebar-nav-item" id="snav-mapa" onclick="switchView('mapa',null);setSidebarActive('mapa')">
     <span class="sidebar-nav-icon">🚦</span> Semáforos
+  </button>
+  <button class="sidebar-nav-item" id="snav-solicitudes" onclick="switchView('solicitudes',null);setSidebarActive('solicitudes')">
+    <span class="sidebar-nav-icon">📨</span> Solicitudes
+    <span class="badge err" id="snav-solicitudes-badge" style="display:none;margin-left:auto;"></span>
   </button>
 
   <div class="sidebar-section-label">Gestión</div>
@@ -1914,6 +1953,7 @@ function updateSidebarBadges() {
     if (hallAbiertos > 0) { badge.textContent = hallAbiertos; badge.style.display = 'inline'; }
     else badge.style.display = 'none';
   }
+  updateSolicitudesBadge();
 }
 
 // ── DESKTOP DASHBOARD ─────────────────────────────────────────
@@ -2340,6 +2380,7 @@ function renderDesktopHistorial() {
         <button class="btn ${APP.filterHist==='herramientas'?'btn-primary':'btn-secondary'} btn-sm" onclick="APP.filterHist='herramientas';renderDesktopHistorial()">🔧 Herramientas</button>
         <button class="btn ${APP.filterHist==='vehiculo'?'btn-primary':'btn-secondary'} btn-sm" onclick="APP.filterHist='vehiculo';renderDesktopHistorial()">🚗 Vehículo</button>
         <button class="btn ${APP.filterHist==='semaforos'?'btn-primary':'btn-secondary'} btn-sm" onclick="APP.filterHist='semaforos';renderDesktopHistorial()">🚦 Semáforos</button>
+        <button class="btn ${APP.filterHist==='solicitud'?'btn-primary':'btn-secondary'} btn-sm" onclick="APP.filterHist='solicitud';renderDesktopHistorial()">📨 Solicitudes</button>
       </div>
       <div class="card">
         ${regs.length === 0
@@ -2423,6 +2464,97 @@ function renderDesktopHallazgos() {
           </div>`
       }
     </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// SOLICITUDES — pestaña propia, separada de Reportes y de Hallazgos
+// ══════════════════════════════════════════════════════════════
+function renderSolicitudes() {
+  if (typeof isDesktop === 'function' && !isDesktop()) return; // pestaña de escritorio
+  const vs = document.getElementById('view-solicitudes');
+  if (!vs) return;
+
+  function horaDeRegistro(registroId) {
+    const reg = APP.registros.find(r => String(r.id) === String(registroId));
+    return reg && reg.hora ? reg.hora : '';
+  }
+
+  const todas = APP.hallazgos.filter(h => h.tipo === 'solicitud').sort((a,b) => b.id - a.id);
+  const pendientes = todas.filter(h => h.estado !== 'cerrado');
+  const resueltas = todas.filter(h => h.estado === 'cerrado');
+
+  vs.innerHTML = `
+    <div class="page-hero">
+      <div>
+        <div class="page-hero-title">Solicitudes y pedidos</div>
+        <div class="page-hero-sub">Reclamos puntuales de los operativos — vehículos, herramientas, EPP o lo que sea</div>
+      </div>
+      <div class="page-hero-actions">
+        <button class="btn btn-secondary btn-sm" onclick="exportarReporteWhatsApp('solicitudes')">💬 WhatsApp</button>
+        <button class="btn btn-primary btn-sm" onclick="exportarReportePDF('solicitudes')">📄 PDF</button>
+      </div>
+    </div>
+    <div style="padding:24px 32px;">
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title" style="color:var(--rojo);">⚠️ Pendientes de atender</div>
+          ${pendientes.length > 0 ? `<span class="badge err">${pendientes.length}</span>` : '<span class="badge ok">Al día</span>'}
+        </div>
+        ${pendientes.length === 0
+          ? `<div class="empty" style="padding:24px;"><div class="empty-icon">✅</div><div class="empty-desc">Sin solicitudes pendientes.</div></div>`
+          : `<table class="hall-table">
+              <thead><tr><th>#</th><th>Pedido / Reclamo</th><th>Quién lo hizo</th><th>Fecha y hora</th><th>Estado</th><th>Acciones</th></tr></thead>
+              <tbody>${pendientes.map(h => {
+                const hora = horaDeRegistro(h.registro_id);
+                return `<tr>
+                  <td style="color:var(--gris-3);font-size:11px;">#${h.id}</td>
+                  <td style="max-width:320px;"><strong>${h.descripcion}</strong>${h.foto ? ` <a href="${h.foto}" target="_blank" style="font-size:11px;">📷 foto</a>` : ''}</td>
+                  <td>${h.trabajador || '—'}</td>
+                  <td>${formatDate(h.fecha)}${hora ? `<div style="font-size:10px;color:var(--gris-3);margin-top:2px;">${hora}</div>` : ''}</td>
+                  <td>${h.estado === 'abierto' ? '<span class="badge info">Sin atender</span>' : '<span class="badge warn">En curso' + (h.responsable ? ' · ' + h.responsable : '') + '</span>'}</td>
+                  <td>
+                    <div style="display:flex;gap:6px;">
+                      <button class="btn btn-sm btn-secondary" onclick="asignarHallazgo(${h.id})">Asignar</button>
+                      <button class="btn btn-sm btn-success" onclick="cerrarHallazgo(${h.id})">✓ Resuelto</button>
+                    </div>
+                  </td>
+                </tr>`;
+              }).join('')}
+              </tbody>
+            </table>`
+        }
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <div class="card-header">
+          <div class="card-title">📋 Historial completo</div>
+        </div>
+        ${resueltas.length === 0
+          ? `<div class="empty" style="padding:20px;"><div class="empty-desc">Todavía no hay solicitudes resueltas.</div></div>`
+          : `<table class="hall-table">
+              <thead><tr><th>#</th><th>Pedido / Reclamo</th><th>Quién lo hizo</th><th>Fecha</th><th>Resuelto</th></tr></thead>
+              <tbody>${resueltas.map(h => `
+                <tr>
+                  <td style="color:var(--gris-3);font-size:11px;">#${h.id}</td>
+                  <td style="max-width:320px;">${h.descripcion}</td>
+                  <td>${h.trabajador || '—'}</td>
+                  <td>${formatDate(h.fecha)}</td>
+                  <td><span class="badge ok">✓ ${h.fecha_cierre ? formatDate(h.fecha_cierre) : ''}</span></td>
+                </tr>`).join('')}
+              </tbody>
+            </table>`
+        }
+      </div>
+    </div>`;
+}
+
+function updateSolicitudesBadge() {
+  const badge = document.getElementById('snav-solicitudes-badge');
+  if (!badge) return;
+  const pendientes = APP.hallazgos.filter(h => h.tipo === 'solicitud' && h.estado !== 'cerrado').length;
+  if (pendientes > 0) { badge.textContent = pendientes; badge.style.display = 'inline'; }
+  else badge.style.display = 'none';
 }
 
 // ── DESKTOP ADMIN ─────────────────────────────────────────────
@@ -2615,11 +2747,14 @@ function renderTablaHallazgos(containerId, hallazgos, esPendientes) {
 function exportarReporteWhatsApp(sector) {
   const esTaller = sector === 'taller';
   const esSemaforos = sector === 'semaforos';
-  const titulo = esTaller ? 'PARA TALLER MECÁNICO' : esSemaforos ? 'CONTROL DE SEMÁFOROS — USO INTERNO' : 'PARA ALMACÉN';
+  const esSolicitudes = sector === 'solicitudes';
+  const titulo = esTaller ? 'PARA TALLER MECÁNICO' : esSemaforos ? 'CONTROL DE SEMÁFOROS — USO INTERNO' : esSolicitudes ? 'SOLICITUDES Y PEDIDOS — USO INTERNO' : 'PARA ALMACÉN';
   const esFiltro = esTaller
     ? h => h.tipo === 'vehiculo'
     : esSemaforos
     ? h => h.tipo === 'semaforos'
+    : esSolicitudes
+    ? h => h.tipo === 'solicitud'
     : h => h.tipo === 'epp' || h.tipo === 'herramientas' || ['conos','pertiga','taburete','escalera_tijera','escalera_ext','malla'].includes(h.campo);
 
   const pendientes = APP.hallazgos.filter(h => esFiltro(h) && h.estado !== 'cerrado');
@@ -2642,8 +2777,8 @@ function exportarReporteWhatsApp(sector) {
     });
   }
 
-  texto += esSemaforos
-    ? `Reporte interno — seguimiento de correctivos de semáforos.`
+  texto += (esSemaforos || esSolicitudes)
+    ? `Reporte interno — seguimiento de ${esSolicitudes ? 'solicitudes y pedidos' : 'correctivos de semáforos'}.`
     : `Para más detalle y/o consultas dirigirse al Encargado de Mediciones.`;
 
   // Copiar al portapapeles
@@ -2659,14 +2794,17 @@ function exportarReporteWhatsApp(sector) {
 function exportarReportePDF(sector) {
   const esTaller = sector === 'taller';
   const esSemaforos = sector === 'semaforos';
-  const titulo = esTaller ? 'Para Personal de Taller Mecánico' : esSemaforos ? 'Control de Semáforos — Uso Interno' : 'Para Personal de Almacén';
-  const colorTitulo = esTaller ? '#1B5E20' : esSemaforos ? '#B8860B' : '#1A237E';
-  const bgTitulo = esTaller ? '#E8F5E9' : esSemaforos ? '#FEF3E2' : '#E8EAF6';
+  const esSolicitudes = sector === 'solicitudes';
+  const titulo = esTaller ? 'Para Personal de Taller Mecánico' : esSemaforos ? 'Control de Semáforos — Uso Interno' : esSolicitudes ? 'Solicitudes y Pedidos — Uso Interno' : 'Para Personal de Almacén';
+  const colorTitulo = esTaller ? '#1B5E20' : esSemaforos ? '#B8860B' : esSolicitudes ? '#B8860B' : '#1A237E';
+  const bgTitulo = esTaller ? '#E8F5E9' : esSemaforos ? '#FEF3E2' : esSolicitudes ? '#FEF3E2' : '#E8EAF6';
 
   const esFiltro = esTaller
     ? h => h.tipo === 'vehiculo'
     : esSemaforos
     ? h => h.tipo === 'semaforos'
+    : esSolicitudes
+    ? h => h.tipo === 'solicitud'
     : h => h.tipo === 'epp' || h.tipo === 'herramientas' || ['conos','pertiga','taburete','escalera_tijera','escalera_ext','malla'].includes(h.campo);
 
   const periodo = window._reportePeriodo || 'semana';
@@ -2733,7 +2871,7 @@ function exportarReportePDF(sector) {
     </table>
 
     <div style="margin-top:24px;padding:12px 16px;background:#EEF1F8;border-radius:6px;font-size:11px;color:#5C6480;">
-      ${esSemaforos ? 'Reporte interno — seguimiento de correctivos de semáforos.' : 'Para más detalle y/o consultas dirigirse al <strong>Encargado de Mediciones</strong>.'}
+      ${(esSemaforos || esSolicitudes) ? `Reporte interno — seguimiento de ${esSolicitudes ? 'solicitudes y pedidos' : 'correctivos de semáforos'}.` : 'Para más detalle y/o consultas dirigirse al <strong>Encargado de Mediciones</strong>.'}
     </div>
     <script>window.onload = () => window.print();<\/script>
   </body></html>`;
@@ -3087,6 +3225,13 @@ const SEMAFOROS_INVENTARIO = [
     lat: -30.7085, lng: -62.0085, ajustado: false },
 ];
 
+// ══════════════════════════════════════════════════════════════
+// SOLICITUDES — pedidos y reportes rápidos de los operativos
+// (herramienta rota, EPP dañado, algo del vehículo, o lo que sea —
+// sin categorías, solo texto + foto opcional. Reutiliza el pipeline
+// de Hallazgos/Registros ya existente, sin tocar el Sheet.)
+// ══════════════════════════════════════════════════════════════
+
 const APP = {
   currentUser: null,
   currentView: 'dashboard',
@@ -3268,6 +3413,7 @@ function switchView(view, btn) {
   if (view === 'admin') refreshAdmin();
   if (view === 'formularios') closeForm();
   if (view === 'mapa') renderMapaSemaforos();
+  if (view === 'solicitudes') renderSolicitudes();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3733,7 +3879,80 @@ function openForm(tipo) {
       selEsq.appendChild(opt);
     });
     selEsq.value = '';
+
+  } else if (tipo === 'reclamo') {
+    document.getElementById('form-reclamo').style.display = 'block';
+    document.getElementById('rec-avatar').textContent = initials(u.nombre);
+    document.getElementById('rec-user-name').textContent = u.nombre;
+    document.getElementById('rec-fecha-badge').textContent = hoy;
+    document.getElementById('rec-descripcion').value = '';
+    document.getElementById('foto-reclamo-previews').innerHTML = '';
+    APP.formData = {};
   }
+}
+
+function abrirReclamoRapido() { abrirSolicitud(); }
+function abrirSolicitud() {
+  switchView('formularios', document.querySelector('[data-view=formularios]'));
+  closeForm(true);
+  openForm('reclamo');
+}
+
+function submitReclamo() {
+  if (fotosSubiendo > 0) {
+    toast('⏳ Esperá a que termine de subir la foto antes de enviar');
+    return;
+  }
+  const u = APP.currentUser;
+  const descripcion = document.getElementById('rec-descripcion').value.trim();
+
+  if (!descripcion) { toast('⚠️ Contanos brevemente qué necesitás o qué encontraste'); return; }
+
+  const foto = (APP.formData.fotosItems && APP.formData.fotosItems.reclamo) || '';
+  const fecha = new Date().toISOString().split('T')[0];
+
+  const reg = {
+    id: APP.nextId++,
+    tipo: 'solicitud',
+    fecha,
+    hora: new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'}),
+    trabajador: u.nombre,
+    puesto: u.puesto,
+    movil: null,
+    conductor: null,
+    acompanante: null,
+    respuestas: {},
+    comentariosItems: {},
+    fotosItems: foto ? { reclamo: foto } : {},
+    observaciones: descripcion,
+    resultado: 'warn',
+    estado: 'pendiente_revision',
+    usuario_id: u.id,
+  };
+  APP.registros.push(reg);
+
+  const hall = {
+    id: APP.nextId++,
+    registro_id: reg.id,
+    tipo: 'solicitud',
+    campo: 'solicitud',
+    descripcion: `📢 ${descripcion}`,
+    criticidad: 'media',
+    foto,
+    fecha,
+    trabajador: u.nombre,
+    movil: null,
+    estado: 'abierto',
+    responsable: '',
+    vencimiento: nextDate(7),
+  };
+  APP.hallazgos.push(hall);
+
+  saveState();
+  syncToSheets(false);
+  closeForm(true);
+  toast('✅ Enviado — gracias por avisar, ' + u.nombre.split(' ').pop());
+  refreshDashboard();
 }
 
 function updateSemaforoForm() {
@@ -3960,6 +4179,7 @@ function closeForm(skipConfirm) {
   document.getElementById('form-herramientas').style.display = 'none';
   document.getElementById('form-vehiculo').style.display = 'none';
   document.getElementById('form-semaforos').style.display = 'none';
+  document.getElementById('form-reclamo').style.display = 'none';
   APP.formData = {};
   conosVal = 0;
   fotosSubiendo = 0;
@@ -4232,6 +4452,15 @@ function renderOperarioDashboard() {
     <div class="page-hero">
       <div class="page-hero-title">Hola, ${u.nombre.split(' ').pop()} 👋</div>
       <div class="page-hero-sub">${fechaStr}</div>
+    </div>
+
+    <div style="padding:0 12px 12px;">
+      <button class="btn btn-full" style="background:#F5A623;color:#fff;border:none;font-weight:700;padding:14px;font-size:13px;" onclick="abrirSolicitud()">
+        📢 Hacer un pedido o reportar algo
+      </button>
+      <div style="font-size:11px;color:var(--gris-3);text-align:center;margin-top:6px;">
+        Herramienta rota, EPP dañado, algo del vehículo... contanos y listo
+      </div>
     </div>
 
     <div class="card">
@@ -4569,7 +4798,7 @@ function diasHasta(fecha) {
 }
 
 function tipoLabel(tipo) {
-  return { epp: '🦺 EPP', herramientas: '🔧 Herramientas', vehiculo: '🚗 Vehículo', semaforos: '🚦 Semáforos' }[tipo] || tipo;
+  return { epp: '🦺 EPP', herramientas: '🔧 Herramientas', vehiculo: '🚗 Vehículo', semaforos: '🚦 Semáforos', solicitud: '📨 Solicitud' }[tipo] || tipo;
 }
 
 // ── Resume en texto corto qué falló en un registro, según sus hallazgos ──
