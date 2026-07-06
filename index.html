@@ -1375,6 +1375,47 @@ body {
     </div>
 
   </main>
+
+  <!-- DESKTOP SIDEBAR (moved inside #app grid container so grid-area works) -->
+<div class="desktop-sidebar" id="desktopSidebar" style="display:none;">
+  <div class="sidebar-section-label">Principal</div>
+  <button class="sidebar-nav-item active" id="snav-dashboard" onclick="switchView('dashboard',null);setSidebarActive('dashboard')">
+    <span class="sidebar-nav-icon">📊</span> Panel de control
+  </button>
+
+  <div class="sidebar-section-label">Controles</div>
+  <button class="sidebar-nav-item" id="snav-formularios" onclick="switchView('formularios',null);setSidebarActive('formularios')">
+    <span class="sidebar-nav-icon">📋</span> Nuevo control
+  </button>
+  <button class="sidebar-nav-item" id="snav-historial" onclick="switchView('historial',null);setSidebarActive('historial')">
+    <span class="sidebar-nav-icon">📁</span> Historial
+  </button>
+  <button class="sidebar-nav-item" id="snav-mapa" onclick="switchView('mapa',null);setSidebarActive('mapa')">
+    <span class="sidebar-nav-icon">🚦</span> Semáforos
+  </button>
+  <button class="sidebar-nav-item" id="snav-solicitudes" onclick="switchView('solicitudes',null);setSidebarActive('solicitudes')">
+    <span class="sidebar-nav-icon">📨</span> Solicitudes
+    <span class="badge err" id="snav-solicitudes-badge" style="display:none;margin-left:auto;"></span>
+  </button>
+
+  <div class="sidebar-section-label">Gestión</div>
+  <button class="sidebar-nav-item" id="snav-hallazgos-item" data-snav-hallazgos onclick="switchView('hallazgos',null);setSidebarActive('hallazgos')">
+    <span class="sidebar-nav-icon">⚠️</span> Hallazgos
+    <span class="sidebar-nav-badge" id="snav-hall-badge" style="display:none">0</span>
+  </button>
+  <button class="sidebar-nav-item" id="snav-admin" style="display:none;" onclick="switchView('admin',null);setSidebarActive('admin')">
+    <span class="sidebar-nav-icon">⚙️</span> Administración
+  </button>
+  <button class="sidebar-nav-item" id="snav-reportes" style="display:none;" onclick="switchView('reportes',null);setSidebarActive('reportes')">
+    <span class="sidebar-nav-icon">📄</span> Reportes
+  </button>
+
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-bottom">
+    <div class="sidebar-bottom-label">COOPMORTEROS</div>
+    <div class="sidebar-version">Auditorías Internas · Mediciones</div>
+  </div>
+</div>
 </div>
 
 <!-- MODALES -->
@@ -1482,45 +1523,6 @@ body {
 
 
 <!-- DESKTOP SIDEBAR (hidden on mobile via CSS) -->
-<div class="desktop-sidebar" id="desktopSidebar" style="display:none;">
-  <div class="sidebar-section-label">Principal</div>
-  <button class="sidebar-nav-item active" id="snav-dashboard" onclick="switchView('dashboard',null);setSidebarActive('dashboard')">
-    <span class="sidebar-nav-icon">📊</span> Panel de control
-  </button>
-
-  <div class="sidebar-section-label">Controles</div>
-  <button class="sidebar-nav-item" id="snav-formularios" onclick="switchView('formularios',null);setSidebarActive('formularios')">
-    <span class="sidebar-nav-icon">📋</span> Nuevo control
-  </button>
-  <button class="sidebar-nav-item" id="snav-historial" onclick="switchView('historial',null);setSidebarActive('historial')">
-    <span class="sidebar-nav-icon">📁</span> Historial
-  </button>
-  <button class="sidebar-nav-item" id="snav-mapa" onclick="switchView('mapa',null);setSidebarActive('mapa')">
-    <span class="sidebar-nav-icon">🚦</span> Semáforos
-  </button>
-  <button class="sidebar-nav-item" id="snav-solicitudes" onclick="switchView('solicitudes',null);setSidebarActive('solicitudes')">
-    <span class="sidebar-nav-icon">📨</span> Solicitudes
-    <span class="badge err" id="snav-solicitudes-badge" style="display:none;margin-left:auto;"></span>
-  </button>
-
-  <div class="sidebar-section-label">Gestión</div>
-  <button class="sidebar-nav-item" id="snav-hallazgos-item" data-snav-hallazgos onclick="switchView('hallazgos',null);setSidebarActive('hallazgos')">
-    <span class="sidebar-nav-icon">⚠️</span> Hallazgos
-    <span class="sidebar-nav-badge" id="snav-hall-badge" style="display:none">0</span>
-  </button>
-  <button class="sidebar-nav-item" id="snav-admin" style="display:none;" onclick="switchView('admin',null);setSidebarActive('admin')">
-    <span class="sidebar-nav-icon">⚙️</span> Administración
-  </button>
-  <button class="sidebar-nav-item" id="snav-reportes" style="display:none;" onclick="switchView('reportes',null);setSidebarActive('reportes')">
-    <span class="sidebar-nav-icon">📄</span> Reportes
-  </button>
-
-  <div class="sidebar-divider"></div>
-  <div class="sidebar-bottom">
-    <div class="sidebar-bottom-label">COOPMORTEROS</div>
-    <div class="sidebar-version">Auditorías Internas · Mediciones</div>
-  </div>
-</div>
 
 <!-- DESKTOP TOPBAR USER (injected into nav-tabs on desktop) -->
 <div class="topbar-user" id="topbarUser" style="display:none;">
