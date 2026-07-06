@@ -1034,6 +1034,12 @@ body {
     <button class="nav-tab" data-view="historial" onclick="switchView('historial',this)">
       <span class="tab-icon">📁</span><span>Historial</span>
     </button>
+    <button class="nav-tab" data-view="mapa" onclick="switchView('mapa',this)">
+      <span class="tab-icon">🚦</span><span>Semáforos</span>
+    </button>
+    <button class="nav-tab" data-view="solicitudes" onclick="navSolicitudesTab(this)">
+      <span class="tab-icon">📨</span><span>Solicitudes</span>
+    </button>
     <button class="nav-tab" id="tabAdmin" data-view="admin" onclick="switchView('admin',this)" style="display:none;">
       <span class="tab-icon">⚙️</span><span>Admin</span>
     </button>
@@ -1331,7 +1337,7 @@ body {
           <div class="empty-title">Sin registros aún</div>
           <div class="empty-desc">Los controles completados aparecerán aquí.</div>
         </div>
-        <div style="margin-top:12px;">
+        <div style="margin-top:12px;" id="wrap-exportar-historial-mobile">
           <button class="btn btn-secondary btn-full" onclick="exportarExcel()">⬇️ Exportar a Excel</button>
         </div>
       </div>
@@ -1393,7 +1399,7 @@ body {
   <button class="sidebar-nav-item" id="snav-mapa" onclick="switchView('mapa',null);setSidebarActive('mapa')">
     <span class="sidebar-nav-icon">🚦</span> Semáforos
   </button>
-  <button class="sidebar-nav-item" id="snav-solicitudes" onclick="switchView('solicitudes',null);setSidebarActive('solicitudes')">
+  <button class="sidebar-nav-item" id="snav-solicitudes" onclick="navSolicitudesTab(null)">
     <span class="sidebar-nav-icon">📨</span> Solicitudes
     <span class="badge err" id="snav-solicitudes-badge" style="display:none;margin-left:auto;"></span>
   </button>
@@ -3366,6 +3372,9 @@ function showApp() {
     if (tabHall) tabHall.style.display = 'none';
     const sidebarHall = document.getElementById('snav-hallazgos-item');
     if (sidebarHall) sidebarHall.style.display = 'none';
+    // Exportar a Excel es solo para el supervisor
+    const wrapExport = document.getElementById('wrap-exportar-historial-mobile');
+    if (wrapExport) wrapExport.style.display = 'none';
   }
   refreshAll();
 }
@@ -3898,6 +3907,19 @@ function abrirSolicitud() {
   switchView('formularios', document.querySelector('[data-view=formularios]'));
   closeForm(true);
   openForm('reclamo');
+}
+
+// La pestaña "Solicitudes" hace cosas distintas según el rol:
+// el supervisor entra a gestionar (ver, asignar, resolver);
+// el operario entra directo al formulario para cargar un pedido.
+function navSolicitudesTab(btn) {
+  const u = APP.currentUser;
+  if (u && u.rol === 'supervisor') {
+    switchView('solicitudes', btn);
+    setSidebarActive('solicitudes');
+  } else {
+    abrirSolicitud();
+  }
 }
 
 function submitReclamo() {
@@ -4542,6 +4564,13 @@ function refreshHistorial() {
   const empty = document.getElementById('historial-empty');
 
   let regs = [...APP.registros].reverse();
+
+  // Los operarios solo ven sus propios registros — el historial completo es del supervisor
+  const u = APP.currentUser;
+  if (u && u.rol !== 'supervisor') {
+    regs = regs.filter(r => r.trabajador === u.nombre || r.conductor === u.nombre || r.acompanante === u.nombre);
+  }
+
   if (APP.filterHist !== 'todos') regs = regs.filter(r => r.tipo === APP.filterHist);
 
   if (regs.length === 0) {
@@ -4894,4 +4923,3 @@ window.doLogin = function() {
 </script>
 </body>
 </html>
-
