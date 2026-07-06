@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#283080">
 <title>Auditorías Internas - Mediciones Eléctricas · Coopmorteros</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 
 
@@ -1125,6 +1127,17 @@ body {
             <div class="control-arrow">›</div>
           </div>
         </div>
+        <div class="control-card" onclick="openForm('semaforos')">
+          <div class="control-card-accent" style="background:#F5A623"></div>
+          <div class="control-card-inner">
+            <div class="control-icon" style="background:#FEF3E2;">🚦</div>
+            <div class="control-info">
+              <div class="control-title">Control de semáforos</div>
+              <div class="control-desc">Mantenimiento mensual por esquina</div>
+            </div>
+            <div class="control-arrow">›</div>
+          </div>
+        </div>
       </div>
 
       <!-- FORM EPP -->
@@ -1215,6 +1228,35 @@ body {
           <button class="btn btn-success" style="flex:2" onclick="submitForm('vehiculo')">✓ Confirmar y enviar</button>
         </div>
       </div>
+
+      <!-- FORM SEMÁFOROS -->
+      <div id="form-semaforos" style="display:none;">
+        <div class="page-hero" style="display:flex;align-items:center;gap:10px;padding:14px 16px;">
+          <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:6px 10px;" onclick="closeForm()">← Volver</button>
+          <span style="font-size:13px;font-weight:700;color:#fff;font-family:'Cocogoose',sans-serif;letter-spacing:.3px;">🚦 Control de semáforos</span>
+        </div>
+        <div class="user-chip">
+          <div class="user-chip-avatar" id="sem-avatar">—</div>
+          <div class="user-chip-info">
+            <div class="user-chip-name" id="sem-user-name">—</div>
+            <div class="user-chip-role" id="sem-user-role">—</div>
+          </div>
+          <span class="badge accent" id="sem-fecha-badge">—</span>
+        </div>
+        <div class="card">
+          <div class="form-group" style="padding:14px 16px 0;">
+            <label class="form-label">Esquina <span class="req">*</span></label>
+            <select class="form-select" id="sem-esquina" onchange="updateSemaforoForm()">
+              <option value="">— Seleccionar esquina —</option>
+            </select>
+          </div>
+          <div class="card-body" id="sem-form-body"></div>
+        </div>
+        <div style="padding:14px 12px;display:flex;gap:8px;">
+          <button class="btn btn-secondary" style="flex:1" onclick="closeForm()">Cancelar</button>
+          <button class="btn btn-success" style="flex:2" onclick="submitForm('semaforos')">✓ Confirmar y enviar</button>
+        </div>
+      </div>
     </div>
 
     <!-- HALLAZGOS -->
@@ -1247,6 +1289,7 @@ body {
           <button class="btn btn-sm btn-secondary" onclick="filterHist('epp',this)" id="filt-epp">🦺 EPP</button>
           <button class="btn btn-sm btn-secondary" onclick="filterHist('herramientas',this)" id="filt-herr">🔧 Herramientas</button>
           <button class="btn btn-sm btn-secondary" onclick="filterHist('vehiculo',this)" id="filt-veh">🚗 Vehículo</button>
+          <button class="btn btn-sm btn-secondary" onclick="filterHist('semaforos',this)" id="filt-sem">🚦 Semáforos</button>
         </div>
         <div id="historial-list"></div>
         <div id="historial-empty" class="empty" style="display:none;">
@@ -1262,6 +1305,7 @@ body {
 
     <!-- REPORTES -->
     <div class="view" id="view-reportes"></div>
+    <div class="view" id="view-mapa"></div>
 
     <!-- ADMIN -->
     <div class="view" id="view-admin">
@@ -1364,6 +1408,7 @@ body {
           <option value="epp">🦺 Control de EPP</option>
           <option value="herramientas">🔧 Control de herramientas</option>
           <option value="vehiculo">🚗 Inspección de vehículos</option>
+          <option value="semaforos">🚦 Control de semáforos</option>
         </select>
       </div>
       <div class="form-group">
@@ -1414,6 +1459,9 @@ body {
   </button>
   <button class="sidebar-nav-item" id="snav-historial" onclick="switchView('historial',null);setSidebarActive('historial')">
     <span class="sidebar-nav-icon">📁</span> Historial
+  </button>
+  <button class="sidebar-nav-item" id="snav-mapa" onclick="switchView('mapa',null);setSidebarActive('mapa')">
+    <span class="sidebar-nav-icon">🚦</span> Semáforos
   </button>
 
   <div class="sidebar-section-label">Gestión</div>
@@ -1579,8 +1627,11 @@ async function pullAndMergeFromSheets(silent) {
 
           // Para vehículos: el móvil puede venir en "trabajador" y el conductor en "puesto"
           // Sheets guarda: col E = trabajador/móvil, col F = puesto/conductor
+          // Preferir la columna dedicada "Ubicación (Móvil/Esquina)" si está presente (filas nuevas);
+          // si viene vacía (filas viejas sincronizadas antes de esa columna), usar el fallback legacy.
           const esVehiculo = tipoNorm === 'vehiculo';
-          const movilVal   = esVehiculo ? (r.movil || r.trabajador || null) : null;
+          const movilDedicado = (r.movil && String(r.movil).trim()) ? r.movil : null;
+          const movilVal = movilDedicado || (esVehiculo ? (r.trabajador || null) : null);
           const conductorVal = esVehiculo ? (r.puesto || r.conductor || null) : null;
           const trabajadorVal = !esVehiculo ? (r.trabajador || null) : null;
 
@@ -1905,6 +1956,7 @@ function renderDesktopDashboard() {
   const countEpp = APP.registros.filter(r => r.tipo === 'epp').length;
   const countHerr = APP.registros.filter(r => r.tipo === 'herramientas').length;
   const countVeh = APP.registros.filter(r => r.tipo === 'vehiculo').length;
+  const countSem = APP.registros.filter(r => r.tipo === 'semaforos').length;
 
   // ── LÓGICA DE CUMPLIMIENTO ────────────────────────────────────
   // Calcular inicio de semana actual (lunes)
@@ -1950,6 +2002,19 @@ function renderDesktopDashboard() {
     return { nombre: u.nombre, tieneEsteMes, estado };
   });
   const eppPendientes = cumplEPP.filter(e => !e.tieneEsteMes);
+
+  // Cumplimiento mensual por esquina (Semáforos)
+  const cumplSemaforos = APP.semaforos.map(esq => {
+    const tieneEsteMes = APP.registros.some(r => {
+      if (r.tipo !== 'semaforos') return false;
+      if (r.movil !== esq.esquina) return false;
+      const d = new Date(r.fecha);
+      return d.getMonth() === mes && d.getFullYear() === anio;
+    });
+    let estado = tieneEsteMes ? 'ok' : (esUltimoViernesMes ? 'vence-hoy' : 'pendiente');
+    return { esquina: esq.esquina, tieneEsteMes, estado };
+  });
+  const semaforosPendientes = cumplSemaforos.filter(s => !s.tieneEsteMes);
 
   // Para el operario logueado: ¿participó en algún control de vehículo esta semana (como conductor o acompañante)?
   const currentUser = APP.currentUser;
@@ -2021,11 +2086,11 @@ function renderDesktopDashboard() {
         <div class="card">
           <div class="card-header">
             <div class="card-title">📋 Estado de cumplimiento</div>
-            <span class="badge ${vehiculosPendientes.length > 0 || eppPendientes.length > 0 ? 'warn' : 'ok'}">
-              ${vehiculosPendientes.length > 0 || eppPendientes.length > 0 ? 'Con pendientes' : 'Todo al día'}
+            <span class="badge ${vehiculosPendientes.length > 0 || eppPendientes.length > 0 || semaforosPendientes.length > 0 ? 'warn' : 'ok'}">
+              ${vehiculosPendientes.length > 0 || eppPendientes.length > 0 || semaforosPendientes.length > 0 ? 'Con pendientes' : 'Todo al día'}
             </span>
           </div>
-          <div style="padding:16px 20px;display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+          <div style="padding:16px 20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;">
 
             <!-- Vehículos semanales -->
             <div>
@@ -2064,6 +2129,24 @@ function renderDesktopDashboard() {
                     <span style="flex:1;font-size:11px;font-weight:600;color:var(--gris-5);">${e.nombre.split(' ').slice(-2).join(' ')}</span>
                     <span style="font-size:11px;color:${e.estado==='ok'?'var(--verde)':e.estado==='vence-hoy'?'var(--rojo)':'var(--ambar)'};">
                       ${e.estado==='ok' ? '✅ Realizado' : e.estado==='vence-hoy' ? '🚨 Vence hoy' : '⏳ Pendiente'}
+                    </span>
+                  </div>`).join('')
+                }
+              </div>
+            </div>
+
+            <!-- Semáforos mensual por esquina -->
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--gris-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">
+                🚦 Control mensual de semáforos
+                <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--gris-3);"> — ${hoy.toLocaleDateString('es-AR',{month:'long',year:'numeric'})}</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;max-height:230px;overflow-y:auto;">
+                ${cumplSemaforos.map(s => `
+                  <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--r);background:${s.estado==='ok'?'var(--verde-l)':s.estado==='vence-hoy'?'var(--rojo-l)':'var(--ambar-l)'};">
+                    <span style="flex:1;font-size:11px;font-weight:600;color:var(--gris-5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.esquina}</span>
+                    <span style="font-size:11px;color:${s.estado==='ok'?'var(--verde)':s.estado==='vence-hoy'?'var(--rojo)':'var(--ambar)'};white-space:nowrap;">
+                      ${s.estado==='ok' ? '✅' : s.estado==='vence-hoy' ? '🚨' : '⏳'}
                     </span>
                   </div>`).join('')
                 }
@@ -2124,6 +2207,7 @@ function renderDesktopDashboard() {
               <span>🦺 EPP: <strong style="color:var(--gris-5);">${countEpp}</strong></span>
               <span>🔧 Herramientas: <strong style="color:var(--gris-5);">${countHerr}</strong></span>
               <span>🚗 Vehículos: <strong style="color:var(--gris-5);">${countVeh}</strong></span>
+              <span>🚦 Semáforos: <strong style="color:var(--gris-5);">${countSem}</strong></span>
             </div>
           </div>
         </div>
@@ -2255,6 +2339,7 @@ function renderDesktopHistorial() {
         <button class="btn ${APP.filterHist==='epp'?'btn-primary':'btn-secondary'} btn-sm" onclick="APP.filterHist='epp';renderDesktopHistorial()">🦺 EPP</button>
         <button class="btn ${APP.filterHist==='herramientas'?'btn-primary':'btn-secondary'} btn-sm" onclick="APP.filterHist='herramientas';renderDesktopHistorial()">🔧 Herramientas</button>
         <button class="btn ${APP.filterHist==='vehiculo'?'btn-primary':'btn-secondary'} btn-sm" onclick="APP.filterHist='vehiculo';renderDesktopHistorial()">🚗 Vehículo</button>
+        <button class="btn ${APP.filterHist==='semaforos'?'btn-primary':'btn-secondary'} btn-sm" onclick="APP.filterHist='semaforos';renderDesktopHistorial()">🚦 Semáforos</button>
       </div>
       <div class="card">
         ${regs.length === 0
@@ -2375,7 +2460,7 @@ function renderDesktopReportes() {
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;">
 
         <!-- REPORTE TALLER -->
         <div>
@@ -2423,6 +2508,29 @@ function renderDesktopReportes() {
           </div>
         </div>
 
+        <!-- REPORTE SEMÁFOROS (solo Supervisor) -->
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:700;color:var(--azul);">🚦 Semáforos (uso interno)</div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-secondary btn-sm" onclick="exportarReporteWhatsApp('semaforos')">💬 WhatsApp</button>
+              <button class="btn btn-primary btn-sm" onclick="exportarReportePDF('semaforos')">📄 PDF</button>
+            </div>
+          </div>
+          <div class="card" id="reporte-semaforos-pendientes">
+            <div class="card-header">
+              <div class="card-title" style="color:var(--rojo);">⚠️ Hallazgos pendientes</div>
+            </div>
+            <div id="tabla-semaforos-pendientes"></div>
+          </div>
+          <div class="card" style="margin-top:16px;">
+            <div class="card-header">
+              <div class="card-title">📋 Histórico del período</div>
+            </div>
+            <div id="tabla-semaforos-historico"></div>
+          </div>
+        </div>
+
       </div>
     </div>`;
 
@@ -2456,6 +2564,7 @@ function setReportePeriodo(periodo) {
   const esTaller  = h => h.tipo === 'vehiculo';
   const esAlmacen = h => h.tipo === 'epp' || h.tipo === 'herramientas' ||
     ['conos','pertiga','taburete','escalera_tijera','escalera_ext','malla'].includes(h.campo);
+  const esSemaforos = h => h.tipo === 'semaforos';
 
   const enPeriodo = h => { const d = new Date(h.fecha); return d >= desde && d <= hoy; };
 
@@ -2463,11 +2572,15 @@ function setReportePeriodo(periodo) {
   const tallerHist    = APP.hallazgos.filter(h => esTaller(h) && enPeriodo(h));
   const almacenPend   = APP.hallazgos.filter(h => esAlmacen(h) && h.estado !== 'cerrado');
   const almacenHist   = APP.hallazgos.filter(h => esAlmacen(h) && enPeriodo(h));
+  const semaforosPend = APP.hallazgos.filter(h => esSemaforos(h) && h.estado !== 'cerrado');
+  const semaforosHist = APP.hallazgos.filter(h => esSemaforos(h) && enPeriodo(h));
 
   renderTablaHallazgos('tabla-taller-pendientes',  tallerPend,  true);
   renderTablaHallazgos('tabla-taller-historico',   tallerHist,  false);
   renderTablaHallazgos('tabla-almacen-pendientes', almacenPend, true);
   renderTablaHallazgos('tabla-almacen-historico',  almacenHist, false);
+  renderTablaHallazgos('tabla-semaforos-pendientes', semaforosPend, true);
+  renderTablaHallazgos('tabla-semaforos-historico',  semaforosHist, false);
 }
 
 function renderTablaHallazgos(containerId, hallazgos, esPendientes) {
@@ -2501,9 +2614,12 @@ function renderTablaHallazgos(containerId, hallazgos, esPendientes) {
 // ── Exportar como texto para WhatsApp ────────────────────────────────────────
 function exportarReporteWhatsApp(sector) {
   const esTaller = sector === 'taller';
-  const titulo = esTaller ? 'PARA TALLER MECÁNICO' : 'PARA ALMACÉN';
+  const esSemaforos = sector === 'semaforos';
+  const titulo = esTaller ? 'PARA TALLER MECÁNICO' : esSemaforos ? 'CONTROL DE SEMÁFOROS — USO INTERNO' : 'PARA ALMACÉN';
   const esFiltro = esTaller
     ? h => h.tipo === 'vehiculo'
+    : esSemaforos
+    ? h => h.tipo === 'semaforos'
     : h => h.tipo === 'epp' || h.tipo === 'herramientas' || ['conos','pertiga','taburete','escalera_tijera','escalera_ext','malla'].includes(h.campo);
 
   const pendientes = APP.hallazgos.filter(h => esFiltro(h) && h.estado !== 'cerrado');
@@ -2526,7 +2642,9 @@ function exportarReporteWhatsApp(sector) {
     });
   }
 
-  texto += `Para más detalle y/o consultas dirigirse al Encargado de Mediciones.`;
+  texto += esSemaforos
+    ? `Reporte interno — seguimiento de correctivos de semáforos.`
+    : `Para más detalle y/o consultas dirigirse al Encargado de Mediciones.`;
 
   // Copiar al portapapeles
   navigator.clipboard.writeText(texto).then(() => {
@@ -2540,12 +2658,15 @@ function exportarReporteWhatsApp(sector) {
 // ── Exportar como PDF ─────────────────────────────────────────────────────────
 function exportarReportePDF(sector) {
   const esTaller = sector === 'taller';
-  const titulo = esTaller ? 'Para Personal de Taller Mecánico' : 'Para Personal de Almacén';
-  const colorTitulo = esTaller ? '#1B5E20' : '#1A237E';
-  const bgTitulo = esTaller ? '#E8F5E9' : '#E8EAF6';
+  const esSemaforos = sector === 'semaforos';
+  const titulo = esTaller ? 'Para Personal de Taller Mecánico' : esSemaforos ? 'Control de Semáforos — Uso Interno' : 'Para Personal de Almacén';
+  const colorTitulo = esTaller ? '#1B5E20' : esSemaforos ? '#B8860B' : '#1A237E';
+  const bgTitulo = esTaller ? '#E8F5E9' : esSemaforos ? '#FEF3E2' : '#E8EAF6';
 
   const esFiltro = esTaller
     ? h => h.tipo === 'vehiculo'
+    : esSemaforos
+    ? h => h.tipo === 'semaforos'
     : h => h.tipo === 'epp' || h.tipo === 'herramientas' || ['conos','pertiga','taburete','escalera_tijera','escalera_ext','malla'].includes(h.campo);
 
   const periodo = window._reportePeriodo || 'semana';
@@ -2612,7 +2733,7 @@ function exportarReportePDF(sector) {
     </table>
 
     <div style="margin-top:24px;padding:12px 16px;background:#EEF1F8;border-radius:6px;font-size:11px;color:#5C6480;">
-      Para más detalle y/o consultas dirigirse al <strong>Encargado de Mediciones</strong>.
+      ${esSemaforos ? 'Reporte interno — seguimiento de correctivos de semáforos.' : 'Para más detalle y/o consultas dirigirse al <strong>Encargado de Mediciones</strong>.'}
     </div>
     <script>window.onload = () => window.print();<\/script>
   </body></html>`;
@@ -2627,6 +2748,147 @@ function renderReportes() {
   if (typeof isDesktop === 'function' && isDesktop()) {
     renderDesktopReportes();
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MAPA DE SEMÁFOROS
+// ══════════════════════════════════════════════════════════════
+let semMapInstance = null;
+let semMarkers = {};
+let semAjusteMode = false;
+
+function estadoEsquina(esqId) {
+  const esq = APP.semaforos.find(e => e.id === esqId);
+  if (!esq) return 'pendiente';
+  const regs = APP.registros.filter(r => r.tipo === 'semaforos' && r.movil === esq.esquina)
+    .sort((a,b) => (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+  if (regs.length === 0) return 'pendiente';
+  const ultimo = regs[regs.length - 1];
+  const fechaReg = new Date(ultimo.fecha);
+  const hoy = new Date();
+  const mismoMes = fechaReg.getMonth() === hoy.getMonth() && fechaReg.getFullYear() === hoy.getFullYear();
+  if (!mismoMes) return 'pendiente';
+  const hallReg = APP.hallazgos.filter(h => h.registro_id === ultimo.id);
+  if (hallReg.some(h => h.criticidad === 'critica' && h.estado !== 'cerrado')) return 'critico';
+  if (ultimo.resultado === 'err' || ultimo.resultado === 'warn') return 'alerta';
+  return 'ok';
+}
+
+function colorEstadoSem(estado) {
+  return { pendiente: '#94A3B8', ok: '#16A34A', alerta: '#F59E0B', critico: '#DC2626' }[estado] || '#94A3B8';
+}
+
+function labelEstadoSem(estado) {
+  return { pendiente: 'Pendiente este mes', ok: 'Controlado — sin novedades', alerta: 'Con observación', critico: 'Hallazgo crítico' }[estado] || estado;
+}
+
+function semPinIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:22px;height:22px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45);"></div>`,
+    iconSize: [22, 22], iconAnchor: [11, 11]
+  });
+}
+
+function renderMapaSemaforos() {
+  if (typeof isDesktop === 'function' && !isDesktop()) return; // vista de escritorio solamente
+  const vm = document.getElementById('view-mapa');
+  if (!vm) return;
+  vm.innerHTML = `
+    <div class="page-hero">
+      <div>
+        <div class="page-hero-title">Semáforos — Mapa de control</div>
+        <div class="page-hero-sub">10 esquinas a cargo de Mediciones · tocá un pin para abrir el control mensual</div>
+      </div>
+      <div class="page-hero-actions">
+        <button class="btn btn-secondary btn-sm" id="btn-ajuste-mapa" onclick="toggleAjusteMapa()">📍 Ajustar ubicaciones</button>
+      </div>
+    </div>
+    <div style="padding:24px 32px;">
+      ${typeof L === 'undefined' ? `
+        <div class="empty" style="padding:40px;">
+          <div class="empty-icon">🗺️</div>
+          <div class="empty-title">No se pudo cargar el mapa</div>
+          <div class="empty-desc">Verificá la conexión a internet — el mapa se sirve desde OpenStreetMap.</div>
+        </div>` : `<div id="semaforos-map" style="height:520px;border-radius:var(--r);overflow:hidden;border:1px solid var(--gris-2);"></div>`}
+      <div style="display:flex;gap:18px;margin-top:12px;font-size:12px;color:var(--gris-4);flex-wrap:wrap;">
+        <span>⚪ Pendiente este mes</span>
+        <span>🟢 Controlado — sin novedades</span>
+        <span>🟡 Con observación</span>
+        <span>🔴 Hallazgo crítico</span>
+      </div>
+      <div id="semaforos-lista" style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+    </div>`;
+
+  if (typeof L !== 'undefined') initSemMap();
+  renderSemLista();
+}
+
+function initSemMap() {
+  if (semMapInstance) { semMapInstance.remove(); semMapInstance = null; }
+  const first = APP.semaforos[0];
+  const center = first ? [first.lat, first.lng] : [-30.713, -62.004];
+  semMapInstance = L.map('semaforos-map').setView(center, 16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap contributors'
+  }).addTo(semMapInstance);
+
+  semMarkers = {};
+  APP.semaforos.forEach(esq => {
+    const estado = estadoEsquina(esq.id);
+    const marker = L.marker([esq.lat, esq.lng], {
+      icon: semPinIcon(colorEstadoSem(estado)),
+      draggable: semAjusteMode
+    }).addTo(semMapInstance);
+    marker.bindTooltip(esq.esquina, { direction: 'top', offset: [0, -10] });
+    marker.on('click', () => { if (!semAjusteMode) abrirControlDesdeMapa(esq.id); });
+    marker.on('dragend', (e) => {
+      const { lat, lng } = e.target.getLatLng();
+      esq.lat = lat; esq.lng = lng; esq.ajustado = true;
+      saveState();
+      toast('📍 Ubicación guardada: ' + esq.esquina);
+    });
+    semMarkers[esq.id] = marker;
+  });
+}
+
+function toggleAjusteMapa() {
+  semAjusteMode = !semAjusteMode;
+  const btn = document.getElementById('btn-ajuste-mapa');
+  if (btn) {
+    btn.textContent = semAjusteMode ? '✅ Terminar ajuste' : '📍 Ajustar ubicaciones';
+    btn.className = semAjusteMode ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+  }
+  toast(semAjusteMode ? '🖐️ Arrastrá cada pin hasta su esquina real en el mapa' : '✅ Ubicaciones guardadas');
+  if (typeof L !== 'undefined') initSemMap();
+}
+
+function renderSemLista() {
+  const el = document.getElementById('semaforos-lista');
+  if (!el) return;
+  el.innerHTML = APP.semaforos.map(esq => {
+    const estado = estadoEsquina(esq.id);
+    const color = colorEstadoSem(estado);
+    return `<div style="display:flex;align-items:center;gap:10px;background:var(--blanco);border:1px solid var(--gris-2);border-radius:var(--r);padding:10px 12px;cursor:pointer;" onclick="abrirControlDesdeMapa('${esq.id}')">
+      <span style="width:12px;height:12px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;color:var(--gris-5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esq.esquina}</div>
+        <div style="font-size:11px;color:var(--gris-3);">${labelEstadoSem(estado)}</div>
+      </div>
+      <span class="control-arrow">›</span>
+    </div>`;
+  }).join('');
+}
+
+function abrirControlDesdeMapa(esqId) {
+  switchView('formularios', null);
+  if (typeof setSidebarActive === 'function') setSidebarActive('formularios');
+  closeForm(true);
+  openForm('semaforos');
+  setTimeout(() => {
+    const sel = document.getElementById('sem-esquina');
+    if (sel) { sel.value = esqId; updateSemaforoForm(); }
+  }, 30);
 }
 
 function renderDesktopAdmin() {
@@ -2778,6 +3040,53 @@ window.addEventListener('resize', () => {
 // ══════════════════════════════════════════════════════════════
 // ESTADO DE LA APP
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// SEMÁFOROS — Inventario y checklist de mantenimiento
+// ══════════════════════════════════════════════════════════════
+const SEM_ITEMS = [
+  { id: 'semControlador',   label: 'Revisión y calibración de controladores' },
+  { id: 'semSincronismo',   label: 'Verificación de sincronismo y funcionamiento horario' },
+  { id: 'semElectrico',     label: 'Reparaciones eléctricas generales' },
+  { id: 'semOpticas',       label: 'Limpieza de ópticas y lentes' },
+  { id: 'semLed',           label: 'Estado de placa / LED / equipo' },
+  { id: 'semPintura',       label: 'Pintura de columnas u otras estructuras de soporte' },
+];
+
+// Inventario de las 10 esquinas — coordenadas iniciales aproximadas (centro de Morteros).
+// Se ajustan una sola vez arrastrando el pin en el mapa (ver vista "Semáforos").
+const SEMAFOROS_INVENTARIO = [
+  { id: 'e1', esquina: 'Bv Hipólito Yrigoyen / Mariano Moreno', tipos: [
+      { tipo: 'Pedestal y Brazo (3 lámp. LED)', cant: 5 }, { tipo: 'Decrementador', cant: 3 }, { tipo: 'De giro', cant: 6 } ],
+    lat: -30.7125, lng: -62.0035, ajustado: false },
+  { id: 'e2', esquina: 'Av Belgrano / Mariano Moreno', tipos: [
+      { tipo: 'Pedestal y Brazo (3 lámp. LED)', cant: 6 }, { tipo: 'Decrementador', cant: 3 } ],
+    lat: -30.7135, lng: -62.0045, ajustado: false },
+  { id: 'e3', esquina: 'Av Belgrano / Pellegrini', tipos: [
+      { tipo: 'Pedestal y Brazo (3 lámp. LED)', cant: 7 }, { tipo: 'Decrementador', cant: 3 } ],
+    lat: -30.7145, lng: -62.0025, ajustado: false },
+  { id: 'e4', esquina: 'Av Belgrano / Bv Sarmiento', tipos: [
+      { tipo: 'Pedestal y Brazo (3 lámp. LED)', cant: 8 }, { tipo: 'Decrementador', cant: 4 } ],
+    lat: -30.7115, lng: -62.0055, ajustado: false },
+  { id: 'e5', esquina: 'Frondizi / Brasil', tipos: [
+      { tipo: 'Pedestal y Brazo (3 lámp. LED)', cant: 6 }, { tipo: 'Decrementador', cant: 3 } ],
+    lat: -30.7155, lng: -62.0015, ajustado: false },
+  { id: 'e6', esquina: 'Bv Hipólito Yrigoyen / Av Perón', tipos: [
+      { tipo: 'Pedestal y Brazo (3 lámp. LED)', cant: 6 }, { tipo: 'Decrementador', cant: 3 } ],
+    lat: -30.7105, lng: -62.0065, ajustado: false },
+  { id: 'e7', esquina: 'Bv 9 de Julio / Av Perón', tipos: [
+      { tipo: 'Pedestal y Brazo (3 lámp. LED)', cant: 8 }, { tipo: 'Decrementador', cant: 4 } ],
+    lat: -30.7165, lng: -62.0005, ajustado: false },
+  { id: 'e8', esquina: 'Alberdi / Av Perón', tipos: [
+      { tipo: 'Pedestal y Brazo (3 lámp. LED)', cant: 6 }, { tipo: 'Decrementador', cant: 3 } ],
+    lat: -30.7095, lng: -62.0075, ajustado: false },
+  { id: 'e9', esquina: 'Av 25 de Mayo / Av 9 de Julio', tipos: [
+      { tipo: 'Pedestal y Brazo (3 lámp. LED)', cant: 8 }, { tipo: 'Decrementador', cant: 4 }, { tipo: 'De peatón', cant: 16 } ],
+    lat: -30.7175, lng: -61.9995, ajustado: false },
+  { id: 'e10', esquina: 'Av 25 de Mayo / Alberdi', tipos: [
+      { tipo: 'Pedestal y Brazo (3 lámp. LED)', cant: 6 }, { tipo: 'Decrementador', cant: 3 } ],
+    lat: -30.7085, lng: -62.0085, ajustado: false },
+];
+
 const APP = {
   currentUser: null,
   currentView: 'dashboard',
@@ -2803,7 +3112,11 @@ const APP = {
     { id: 1, tipo: 'vehiculo', nombre: '🚗 Inspección semanal de vehículos + EPC', frec: 'semanal', vencimiento: nextDate(7), aviso: 2 },
     { id: 2, tipo: 'epp', nombre: '🦺 Control mensual de EPP', frec: 'mensual', vencimiento: nextDate(30), aviso: 5 },
     { id: 3, tipo: 'herramientas', nombre: '🔧 Control semestral de herramientas', frec: 'semestral', vencimiento: nextDate(180), aviso: 14 },
+    { id: 4, tipo: 'semaforos', nombre: '🚦 Control mensual de semáforos', frec: 'mensual', vencimiento: nextDate(30), aviso: 5 },
   ],
+
+  // SEMÁFOROS — inventario de esquinas (editable: posición de pin en el mapa)
+  semaforos: JSON.parse(JSON.stringify(SEMAFOROS_INVENTARIO)),
 
   // REGISTROS (base de datos local)
   registros: [],
@@ -2827,6 +3140,7 @@ function loadState() {
       if (s.registros) APP.registros = s.registros;
       if (s.hallazgos) APP.hallazgos = s.hallazgos;
       if (s.ciclos) APP.ciclos = s.ciclos;
+      if (s.semaforos) APP.semaforos = s.semaforos;
       if (s.nextId) APP.nextId = s.nextId;
       if (s.sheetId) APP.sheetId = s.sheetId;
     }
@@ -2838,6 +3152,7 @@ function saveState() {
     localStorage.setItem('sige_state', JSON.stringify({
       users: APP.users, registros: APP.registros,
       hallazgos: APP.hallazgos, ciclos: APP.ciclos,
+      semaforos: APP.semaforos,
       nextId: APP.nextId, sheetId: APP.sheetId
     }));
   } catch(e) {}
@@ -2952,6 +3267,7 @@ function switchView(view, btn) {
   if (view === 'historial') refreshHistorial();
   if (view === 'admin') refreshAdmin();
   if (view === 'formularios') closeForm();
+  if (view === 'mapa') renderMapaSemaforos();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3131,6 +3447,7 @@ const VEH_HIDRO = [
   { id: 'mandos', label: 'Mandos de control (cabina y canasto)', critico: true },
   { id: 'estabilizadores', label: 'Estabilizadores / gatos hidráulicos', critico: true },
 ];
+
 
 // ══════════════════════════════════════════════════════════════
 // RENDER FORMS
@@ -3398,7 +3715,48 @@ function openForm(tipo) {
         sel.appendChild(opt);
       });
     sel.value = ''; // resetear selección
+
+  } else if (tipo === 'semaforos') {
+    document.getElementById('form-semaforos').style.display = 'block';
+    document.getElementById('sem-avatar').textContent = initials(u.nombre);
+    document.getElementById('sem-user-name').textContent = u.nombre;
+    document.getElementById('sem-user-role').textContent = u.puesto + ' · Control mensual';
+    document.getElementById('sem-fecha-badge').textContent = hoy;
+    document.getElementById('sem-form-body').innerHTML = '';
+
+    const selEsq = document.getElementById('sem-esquina');
+    while (selEsq.options.length > 1) selEsq.remove(1);
+    APP.semaforos.forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e.id;
+      opt.textContent = e.esquina;
+      selEsq.appendChild(opt);
+    });
+    selEsq.value = '';
   }
+}
+
+function updateSemaforoForm() {
+  const esqId = document.getElementById('sem-esquina').value;
+  if (!esqId) { document.getElementById('sem-form-body').innerHTML = ''; return; }
+  const esq = APP.semaforos.find(e => e.id === esqId);
+  APP.formData = {};
+  APP.formData._esquina = esq ? esq.esquina : esqId;
+  APP.formData._esquinaId = esqId;
+
+  let html = '';
+  if (esq) {
+    html += `<div style="background:var(--gris-0);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--gris-4);">
+      ${esq.tipos.map(t => `${t.tipo}: <strong>${t.cant}</strong>`).join(' · ')}
+    </div>`;
+  }
+  html += renderSectionTitle('Tareas de mantenimiento');
+  SEM_ITEMS.forEach(item => {
+    html += renderFormItem(item.id, item.label, radioOpts(item.id, 'std'), item.critico);
+  });
+  html += `<div id="resultado-box" style="display:none;"></div>`;
+  html += renderObs('sem');
+  document.getElementById('sem-form-body').innerHTML = html;
 }
 
 function updateVehiculoForm() {
@@ -3601,6 +3959,7 @@ function closeForm(skipConfirm) {
   document.getElementById('form-epp').style.display = 'none';
   document.getElementById('form-herramientas').style.display = 'none';
   document.getElementById('form-vehiculo').style.display = 'none';
+  document.getElementById('form-semaforos').style.display = 'none';
   APP.formData = {};
   conosVal = 0;
   fotosSubiendo = 0;
@@ -3648,7 +4007,7 @@ function submitForm(tipo) {
     hora: new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'}),
     trabajador: tipo !== 'vehiculo' ? u.nombre : null,
     puesto: tipo !== 'vehiculo' ? u.puesto : null,
-    movil: tipo === 'vehiculo' ? APP.formData._movil : null,
+    movil: tipo === 'vehiculo' ? APP.formData._movil : (tipo === 'semaforos' ? APP.formData._esquina : null),
     conductor: tipo === 'vehiculo' ? u.nombre : null,
     acompanante: tipo === 'vehiculo' ? (document.getElementById('veh-acompanante')?.value || '') : null,
     respuestas: {...APP.formData},
@@ -3721,11 +4080,14 @@ const CRITICIDAD_ITEMS = {
   dest_phil_45: 'critica', dest_phil_6: 'critica', pinza_alicate: 'critica',
   pinza_universal: 'critica', pinza_punta: 'critica', llave_ajust: 'critica',
   detector: 'critica', arnes: 'critica',
+  // Semáforos — riesgo vial directo si falla el control/sincronismo
+  semControlador: 'critica', semSincronismo: 'critica',
   // ALTA — seguridad operativa
   casco: 'alta', frenos: 'alta', matafuego: 'alta',
   escalera_tijera: 'alta', escalera_ext: 'alta',
   pluma: 'alta', canasto: 'alta', mandos: 'alta', estabilizadores: 'alta',
-  // MEDIA — logística y reposición (todo lo demás cae acá por defecto)
+  semElectrico: 'alta', semOpticas: 'alta', semLed: 'alta',
+  // MEDIA — logística y reposición (todo lo demás cae acá por defecto, incluye semPintura)
 };
 
 function getCriticidad(campo, valorRespuesta) {
@@ -3741,6 +4103,9 @@ function labelCampo(campo) {
     guante_mt:'Guante dieléctrico MT', pertiga:'Pértiga dieléctrica', taburete:'Taburete dieléctrico',
     matafuego:'Matafuego', frenos:'Frenos', conos:'Conos de señalización',
     pluma:'Pluma hidro elevador', canasto:'Canasto hidro elevador', mandos:'Mandos de control',
+    semControlador:'Controlador de semáforo', semSincronismo:'Sincronismo horario',
+    semElectrico:'Instalación eléctrica', semOpticas:'Ópticas y lentes',
+    semLed:'Placa / LED / equipo', semPintura:'Pintura de columna',
   };
   return map[campo] || campo.replace(/_/g,' ');
 }
@@ -4121,7 +4486,7 @@ function addCiclo() {
   const frec = document.getElementById('new-ciclo-frec').value;
   const fecha = document.getElementById('new-ciclo-fecha').value;
   const aviso = parseInt(document.getElementById('new-ciclo-aviso').value);
-  const nombre = { epp:'🦺 Control de EPP', herramientas:'🔧 Control de herramientas', vehiculo:'🚗 Inspección de vehículos' }[tipo];
+  const nombre = { epp:'🦺 Control de EPP', herramientas:'🔧 Control de herramientas', vehiculo:'🚗 Inspección de vehículos', semaforos:'🚦 Control de semáforos' }[tipo];
   APP.ciclos.push({ id: APP.nextId++, tipo, nombre, frec, vencimiento: fecha, aviso });
   saveState();
   closeModal('modalAddCiclo');
@@ -4204,7 +4569,7 @@ function diasHasta(fecha) {
 }
 
 function tipoLabel(tipo) {
-  return { epp: '🦺 EPP', herramientas: '🔧 Herramientas', vehiculo: '🚗 Vehículo' }[tipo] || tipo;
+  return { epp: '🦺 EPP', herramientas: '🔧 Herramientas', vehiculo: '🚗 Vehículo', semaforos: '🚦 Semáforos' }[tipo] || tipo;
 }
 
 // ── Resume en texto corto qué falló en un registro, según sus hallazgos ──
